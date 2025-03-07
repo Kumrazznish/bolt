@@ -11,7 +11,30 @@ import { join } from 'path';
 
 dotenv.config();
 
+// Check if inside a Git repository
+const isGitRepo = () => {
+  try {
+    return execSync('git rev-parse --is-inside-work-tree').toString().trim() === 'true';
+  } catch {
+    return false;
+  }
+};
+
+// Get Git information (fallback if not inside a repo)
 const getGitInfo = () => {
+  if (!isGitRepo()) {
+    console.warn('⚠️ Not a Git repository, skipping Git info.');
+    return {
+      commitHash: 'no-git-info',
+      branch: 'unknown',
+      commitTime: 'unknown',
+      author: 'unknown',
+      email: 'unknown',
+      remoteUrl: 'unknown',
+      repoName: 'unknown',
+    };
+  }
+  
   try {
     return {
       commitHash: execSync('git rev-parse --short HEAD').toString().trim(),
@@ -39,6 +62,7 @@ const getGitInfo = () => {
   }
 };
 
+// Read package.json to get project details
 const getPackageJson = () => {
   try {
     const pkgPath = join(process.cwd(), 'package.json');
@@ -92,9 +116,10 @@ export default defineConfig((config) => {
       target: 'esnext',
     },
     server: {
-      host: '0.0.0.0',
-      port: process.env.PORT || 5173,
-      allowedHosts: ['bolt-g6wt.onrender.com'],
+      port: process.env.PORT || 5173, // Ensure port is set dynamically
+      host: true, 
+      strictPort: true, // Avoid port conflicts
+      allowedHosts: ['.onrender.com'], // Allow Render hosts
     },
     plugins: [
       nodePolyfills({
@@ -109,7 +134,15 @@ export default defineConfig((config) => {
           v3_lazyRouteDiscovery: true,
         },
       }),
-      UnoCSS(),
+      UnoCSS({
+        presets: [
+          require('unocss-preset-icons')({
+            collections: {
+              lucide: () => import('@iconify-json/lucide').then((m) => m.default),
+            },
+          }),
+        ],
+      }),
       tsconfigPaths(),
       chrome129IssuePlugin(),
       config.mode === 'production' && optimizeCssModules({ apply: 'build' }),
@@ -131,6 +164,7 @@ export default defineConfig((config) => {
   };
 });
 
+// Fix for Chrome 129 issue affecting local development
 function chrome129IssuePlugin() {
   return {
     name: 'chrome129IssuePlugin',
@@ -146,6 +180,7 @@ function chrome129IssuePlugin() {
             res.end(
               '<body><h1>Please use Chrome Canary for testing.</h1><p>Chrome 129 has an issue with JavaScript modules & Vite local development, see <a href="https://github.com/stackblitz/bolt.new/issues/86#issuecomment-2395519258">for more information.</a></p><p><b>Note:</b> This only impacts <u>local development</u>. `pnpm run build` and `pnpm run start` will work fine in this browser.</p></body>',
             );
+
             return;
           }
         }
